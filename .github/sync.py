@@ -7,7 +7,7 @@ from github import Github
 
 def get_github_latest_release():
     g = Github()
-    repo = g.get_repo("naiba/nezha")
+    repo = g.get_repo("nezhahq/nezha")
     release = repo.get_latest_release()
     if release:
         print(f"Latest release tag is: {release.tag_name}")
@@ -118,8 +118,7 @@ def sync_to_gitee(tag: str, body: str, files: slice):
 
     # 仅保留最新 Release 以防超出 Gitee 仓库配额
     try:
-        delete_gitee_releases(release_id, api_client,
-                              release_api_uri, access_token)
+        delete_gitee_releases(release_id, api_client, release_api_uri, access_token)
     except ValueError as e:
         print(e)
 

@@ -6,6 +6,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/nezhahq/nezha/service/singleton"
 )
 
 type ioStreamContext struct {
@@ -13,6 +15,8 @@ type ioStreamContext struct {
 	agentIo          io.ReadWriteCloser
 	userIoConnectCh  chan struct{}
 	agentIoConnectCh chan struct{}
+	userIoChOnce     sync.Once
+	agentIoChOnce    sync.Once
 }
 
 type bp struct {
@@ -72,7 +76,9 @@ func (s *NezhaHandler) UserConnected(streamId string, userIo io.ReadWriteCloser)
 	}
 
 	stream.userIo = userIo
-	close(stream.userIoConnectCh)
+	stream.userIoChOnce.Do(func() {
+		close(stream.userIoConnectCh)
+	})
 
 	return nil
 }
@@ -84,7 +90,9 @@ func (s *NezhaHandler) AgentConnected(streamId string, agentIo io.ReadWriteClose
 	}
 
 	stream.agentIo = agentIo
-	close(stream.agentIoConnectCh)
+	stream.agentIoChOnce.Do(func() {
+		close(stream.agentIoConnectCh)
+	})
 
 	return nil
 }
@@ -117,13 +125,13 @@ LOOP:
 	}
 
 	if stream.userIo == nil && stream.agentIo == nil {
-		return errors.New("timeout: no connection established")
+		return singleton.Localizer.ErrorT("timeout: no connection established")
 	}
 	if stream.userIo == nil {
-		return errors.New("timeout: user connection not established")
+		return singleton.Localizer.ErrorT("timeout: user connection not established")
 	}
 	if stream.agentIo == nil {
-		return errors.New("timeout: agent connection not established")
+		return singleton.Localizer.ErrorT("timeout: agent connection not established")
 	}
 
 	isDone := new(atomic.Bool)

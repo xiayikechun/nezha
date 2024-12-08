@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/naiba/nezha/pkg/utils"
+	"github.com/nezhahq/nezha/pkg/utils"
 )
 
 const (
@@ -32,14 +32,13 @@ type NotificationServerBundle struct {
 
 type Notification struct {
 	Common
-	Name          string
-	Tag           string // 分组名
-	URL           string
-	RequestMethod int
-	RequestType   int
-	RequestHeader string `gorm:"type:longtext" `
-	RequestBody   string `gorm:"type:longtext" `
-	VerifySSL     *bool
+	Name          string `json:"name"`
+	URL           string `json:"url"`
+	RequestMethod uint8  `json:"request_method"`
+	RequestType   uint8  `json:"request_type"`
+	RequestHeader string `json:"request_header" gorm:"type:longtext"`
+	RequestBody   string `json:"request_body" gorm:"type:longtext"`
+	VerifyTLS     *bool  `json:"verify_tls,omitempty"`
 }
 
 func (ns *NotificationServerBundle) reqURL(message string) string {
@@ -112,7 +111,7 @@ func (n *Notification) setRequestHeader(req *http.Request) error {
 func (ns *NotificationServerBundle) Send(message string) error {
 	var client *http.Client
 	n := ns.Notification
-	if n.VerifySSL != nil && *n.VerifySSL {
+	if n.VerifyTLS != nil && *n.VerifyTLS {
 		client = utils.HttpClient
 	} else {
 		client = utils.HttpClientSkipTlsVerify
@@ -194,7 +193,7 @@ func (ns *NotificationServerBundle) replaceParamsInString(str string, message st
 		str = strings.ReplaceAll(str, "#SERVER.UDPCONNCOUNT#", mod(fmt.Sprintf("%d", ns.Server.State.UdpConnCount)))
 
 		var ipv4, ipv6, validIP string
-		ipList := strings.Split(ns.Server.Host.IP, "/")
+		ipList := strings.Split(ns.Server.GeoIP.IP.Join(), "/")
 		if len(ipList) > 1 {
 			// 双栈
 			ipv4 = ipList[0]
@@ -202,7 +201,7 @@ func (ns *NotificationServerBundle) replaceParamsInString(str string, message st
 			validIP = ipv4
 		} else if len(ipList) == 1 {
 			// 仅ipv4|ipv6
-			if strings.Contains(ipList[0], ":") {
+			if strings.IndexByte(ipList[0], ':') != -1 {
 				ipv6 = ipList[0]
 				validIP = ipv6
 			} else {

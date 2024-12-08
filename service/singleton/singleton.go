@@ -8,17 +8,32 @@ import (
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 
-	"github.com/naiba/nezha/model"
-	"github.com/naiba/nezha/pkg/utils"
+	"github.com/nezhahq/nezha/model"
+	"github.com/nezhahq/nezha/pkg/utils"
 )
 
 var Version = "debug"
 
 var (
-	Conf  *model.Config
-	Cache *cache.Cache
-	DB    *gorm.DB
-	Loc   *time.Location
+	Conf          *model.Config
+	Cache         *cache.Cache
+	DB            *gorm.DB
+	Loc           *time.Location
+	UserTemplates = []model.UserTemplate{
+		{
+			Path:       "user-dist",
+			Name:       "Official",
+			Repository: "https://github.com/hamster1963/nezha-dash",
+			Author:     "hamster1963",
+		}, {
+			Path:       "nazhua-dist",
+			Name:       "Nazhua",
+			Repository: "https://github.com/hi2shark/nazhua",
+			Author:     "hi2hi",
+			Community:  true,
+		},
+	}
+	DashboardBootTime = uint64(time.Now().Unix())
 )
 
 func InitTimezoneAndCache() {
@@ -33,10 +48,10 @@ func InitTimezoneAndCache() {
 
 // LoadSingleton 加载子服务并执行
 func LoadSingleton() {
+	initI18n()          // 加载本地化服务
 	loadNotifications() // 加载通知服务
 	loadServers()       // 加载服务器列表
 	loadCronTasks()     // 加载定时任务
-	loadAPI()
 	initNAT()
 	initDDNS()
 }
@@ -44,7 +59,7 @@ func LoadSingleton() {
 // InitConfigFromPath 从给出的文件路径中加载配置
 func InitConfigFromPath(path string) {
 	Conf = &model.Config{}
-	err := Conf.Read(path)
+	err := Conf.Read(path, UserTemplates)
 	if err != nil {
 		panic(err)
 	}
@@ -62,10 +77,11 @@ func InitDBFromPath(path string) {
 	if Conf.Debug {
 		DB = DB.Debug()
 	}
-	err = DB.AutoMigrate(model.Server{}, model.User{},
-		model.Notification{}, model.AlertRule{}, model.Monitor{},
-		model.MonitorHistory{}, model.Cron{}, model.Transfer{},
-		model.ApiToken{}, model.NAT{}, model.DDNSProfile{})
+	err = DB.AutoMigrate(model.Server{}, model.User{}, model.ServerGroup{}, model.NotificationGroup{},
+		model.Notification{}, model.AlertRule{}, model.Service{}, model.NotificationGroupNotification{},
+		model.ServiceHistory{}, model.Cron{}, model.Transfer{}, model.ServerGroupServer{}, model.UserGroup{},
+		model.UserGroupUser{}, model.NAT{}, model.DDNSProfile{}, model.NotificationGroupNotification{},
+		model.WAF{})
 	if err != nil {
 		panic(err)
 	}
@@ -98,14 +114,14 @@ func RecordTransferHourlyUsage() {
 	log.Println("NEZHA>> Cron 流量统计入库", len(txs), DB.Create(txs).Error)
 }
 
-// CleanMonitorHistory 清理无效或过时的 监控记录 和 流量记录
-func CleanMonitorHistory() {
+// CleanServiceHistory 清理无效或过时的 监控记录 和 流量记录
+func CleanServiceHistory() {
 	// 清理已被删除的服务器的监控记录与流量记录
-	DB.Unscoped().Delete(&model.MonitorHistory{}, "created_at < ? OR monitor_id NOT IN (SELECT `id` FROM monitors)", time.Now().AddDate(0, 0, -30))
+	DB.Unscoped().Delete(&model.ServiceHistory{}, "created_at < ? OR service_id NOT IN (SELECT `id` FROM services)", time.Now().AddDate(0, 0, -30))
 	// 由于网络监控记录的数据较多，并且前端仅使用了 1 天的数据
 	// 考虑到 sqlite 数据量问题，仅保留一天数据，
 	// server_id = 0 的数据会用于/service页面的可用性展示
-	DB.Unscoped().Delete(&model.MonitorHistory{}, "(created_at < ? AND server_id != 0) OR monitor_id NOT IN (SELECT `id` FROM monitors)", time.Now().AddDate(0, 0, -1))
+	DB.Unscoped().Delete(&model.ServiceHistory{}, "(created_at < ? AND server_id != 0) OR service_id NOT IN (SELECT `id` FROM services)", time.Now().AddDate(0, 0, -1))
 	DB.Unscoped().Delete(&model.Transfer{}, "server_id NOT IN (SELECT `id` FROM servers)")
 	// 计算可清理流量记录的时长
 	var allServerKeep time.Time
