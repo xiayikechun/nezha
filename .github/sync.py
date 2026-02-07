@@ -129,26 +129,32 @@ def sync_to_gitee(tag: str, body: str, files: list):
         retries = 0
 
         while not success and retries < max_retries:
-            with open(file_path, "rb") as f:
-                upload_files = {"file": f}
+            try:
+                with open(file_path, "rb") as f:
+                    upload_files = {"file": f}
 
-                asset_api_response = requests.post(
-                    asset_api_uri,
-                    params={"access_token": access_token},
-                    files=upload_files,
-                    timeout=300,
-                )
+                    asset_api_response = requests.post(
+                        asset_api_uri,
+                        params={"access_token": access_token},
+                        files=upload_files,
+                        timeout=300,
+                    )
 
-            if asset_api_response.status_code == 201:
-                asset_info = asset_api_response.json()
-                asset_name = asset_info.get("name")
-                print(f"Successfully uploaded {asset_name}!")
-                success = True
-            else:
+                if asset_api_response.status_code == 201:
+                    asset_info = asset_api_response.json()
+                    asset_name = asset_info.get("name")
+                    print(f"Successfully uploaded {asset_name}!")
+                    success = True
+                else:
+                    retries += 1
+                    print(
+                        f"Request failed with status code {asset_api_response.status_code}, retry {retries}/{max_retries}"
+                    )
+                    if retries < max_retries:
+                        time.sleep(30)
+            except requests.exceptions.RequestException as err:
                 retries += 1
-                print(
-                    f"Request failed with status code {asset_api_response.status_code}, retry {retries}/{max_retries}"
-                )
+                print(f"Upload error: {err}, retry {retries}/{max_retries}")
                 if retries < max_retries:
                     time.sleep(30)
 
