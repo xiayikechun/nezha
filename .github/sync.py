@@ -160,6 +160,8 @@ def sync_to_gitee(tag: str, body: str, files: list):
 
         if not success:
             print(f"Failed to upload {file_path} after {max_retries} retries")
+            api_client.close()
+            raise SystemExit(1)
 
     # 仅保留最新 Release 以防超出 Gitee 仓库配额
     try:
